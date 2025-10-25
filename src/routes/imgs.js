@@ -1,4 +1,13 @@
 import express from "express";
+import dotenv from "dotenv";
+import db from "../config/database.js";
+import SetTracker from "../config/setTracker.js";
+import { randomBytes } from "crypto";
+import * as fs from "node:fs";
+
+dotenv.config();
+
+const IMAGE_STORAGE_PATH = process.env.IMAGE_STORAGE_PATH;
 
 const router = express.Router();
 
@@ -6,70 +15,188 @@ const router = express.Router();
  * GET /imgs/:id
  * Returns a specific image
  */
-router.get("/:id", (req, res) => {
-    // logic here
+router.get("/:id", async (req, res) => {
     const id = req.params.id;
 
-    // change me!
-    res.status(501).json({
-        message: "not implemented"
-    })
+    try {
+        // Get the image path from metadata
+        const imgMeta = await db.get("SELECT path FROM imgs WHERE id = ?;", id);
+        if (!imgMeta) {
+            return res.status(404).json({
+                success: false,
+                error: "Image not found"
+            });
+        }
+
+        // Get the image file from storage
+        const imgPath = `${IMAGE_STORAGE_PATH}/${imgMeta.path}`;
+        return res.sendFile(imgPath);
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: "Oopsies! Internal server error :("
+        });
+    }
 });
 
 /**
  * GET /imgs/:id/meta
  * Returns metadata for a specific image
  */
-router.get("/:id/meta", (req, res) => {
-    // logic here
+router.get("/:id/meta", async (req, res) => {
     const id = req.params.id;
 
-    // change me!
-    res.status(501).json({
-        message: "not implemented"
-    })
+    try {
+        // Get the image path from metadata
+        const imgMeta = await db.get("SELECT id, title, set_id, seq_no FROM imgs WHERE id = ?;", id);
+        if (!imgMeta) {
+            return res.status(404).json({
+                success: false,
+                error: "Image not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            id: imgMeta.id,
+            title: imgMeta.title,
+            set_id: imgMeta.set_id,
+            seq_no: imgMeta.seq_no
+        })
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: "Oopsies! Internal server error :("
+        });
+    }
 });
 
 /**
  * GET /imgs/:id/hint
  * Returns the hint for a specific image
  */
-router.get("/:id/hint", (req, res) => {
-    // logic here
+router.get("/:id/hint", async (req, res) => {
     const id = req.params.id;
 
-    // change me!
-    res.status(501).json({
-        message: "not implemented"
-    })
+    try {
+        // Get the image path from metadata
+        const imgMeta = await db.get("SELECT hint FROM imgs WHERE id = ?;", id);
+        if (!imgMeta) {
+            return res.status(404).json({
+                success: false,
+                error: "Image not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            hint: imgMeta.hint
+        })
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: "Oopsies! Internal server error :("
+        });
+    }
 });
 
 /**
  * POST /imgs/:id/outcome
  * Indicates whether the user skipped or completed the image
  */
-router.post("/:id/outcome", (req, res) => {
-    // logic here
+router.post("/:id/outcome", async (req, res) => {
     const id = req.params.id;
+    const { skipped, completed, lat, lng } = req.body;
 
-    // change me!
-    res.status(501).json({
-        message: "not implemented"
-    })
+    // validate booleans
+    if (typeof skipped !== 'boolean' || typeof completed !== 'boolean') {
+        return res.status(400).json({
+            success: false,
+            error: "Invalid request body"
+        });
+    }
+
+    // ensure only one of skipped or completed is true
+    if (skipped && completed) {
+        return res.status(400).json({
+            success: false,
+            error: "Invalid request body"
+        });
+    }
+
+    // validate lat lng if completed
+    if (completed) {
+        if (typeof lat !== 'number' || typeof lng !== 'number') {
+            return res.status(400).json({
+                success: false,
+                error: "Invalid request body"
+            });
+        }
+    }
+
+    // if skipped, update the SetTracker instance accordingly
+    if (skipped) {
+        SetTracker.skipImg(req.user.id, id);
+    }
+
+    // if completed, add evidence to database and send the id for evidence submission
+    if (completed) {
+        try {
+            const path = `evidence_user${req.user.id}_img${id}_${Date.now()}_${randomBytes(16)}.jpg`;
+            const result = await db.run("INSERT INTO evidence (img_id, user_id, path, lat, lng) VALUES (?, ?, ?, ??);", id, req.user.id, path, lat, lng);
+            const evidenceId = result.lastID;
+            return res.status(200).json({
+                success: true,
+                evidence_id: evidenceId
+            });
+        }
+        catch (error) {
+            return res.status(500).json({
+                success: false,
+                error: "Oopsies! Internal server error :("
+            });
+        }
+    }
 });
 
 /**
  * POST /imgs/:id/submit
  * Endpoint for submitting the image evidence
  */
-router.post("/:id/submit", (req, res) => {
-    // logic here
+router.post("/:id/submit", async (req, res) => {
     const id = req.params.id;
 
-    // change me!
-    res.status(501).json({
-        message: "not implemented"
-    })
+    // try to get the path from the evidence table
+    try {
+        const evidence = await db.get("SELECT path FROM evidence WHERE id = ? AND user_id = ?;", id, req.user.id);
+        if (!evidence) {
+            return res.status(404).json({
+                success: false,
+                error: "Evidence not found"
+            });
+        }
+        const imgPath = `${IMAGE_STORAGE_PATH}/${evidence.path}`;
+
+        // write image file to storage (from body)
+        // assuming the body is just the image
+        req.pipe(fs.createWriteStream(imgPath));
+
+        // mark the image as completed in SetTracker
+        SetTracker.completeImg(req.user.id, id);
+
+        return res.status(200).json({
+            success: true,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: "Oopsies! Internal server error :("
+        });
+    }
 });
 
 export default router;

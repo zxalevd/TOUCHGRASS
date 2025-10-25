@@ -44,6 +44,18 @@ CREATE TABLE IF NOT EXISTS leaderboard (
     UNIQUE (set_id, user_id)
 );
 
+CREATE TABLE IF NOT EXISTS evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL, -- file path or URL
+    lat REAL,           -- latitude (nullable)
+    lng REAL,           -- longitude (nullable)
+    user_id INTEGER NOT NULL, -- user who submitted
+    img_id INTEGER NOT NULL,  -- associated image that this evidence is for
+    created_at DATETIME DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (img_id) REFERENCES imgs(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 -- Useful indexes
 CREATE INDEX IF NOT EXISTS idx_imgs_set_id ON imgs (set_id);
 CREATE INDEX IF NOT EXISTS idx_sets_creator_id ON sets (creator_id);

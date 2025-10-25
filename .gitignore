@@ -1,3 +1,6 @@
+db/main.db
+db/images/
+
 # Logs
 logs
 *.log
