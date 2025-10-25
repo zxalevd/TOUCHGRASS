@@ -10,7 +10,7 @@ dotenv.config();
 const MIN_PASSWORD_LENGTH = 8;
 const SALT_ROUNDS = 10;
 const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRE = process.env.JWT_EXPIRE;
+const JWT_EXPIRE = Number(process.env.JWT_EXPIRE);
 
 const router = express.Router();
 
