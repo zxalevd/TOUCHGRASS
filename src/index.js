@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import morgan from 'morgan';
+import router from "./routes/index.js";
 
 dotenv.config();
 
@@ -36,10 +37,10 @@ app.get('/', (req, res) => {
     })
 });
 
-// ADD ROUTES FROM ROUTES FILE
+app.use('/api', router);
 
 // INITIALISE DB
 
 app.listen(PORT, () => {
-    console.log(`Listening on ${PORT}`);
+    console.log(`Listening on http://localhost:${PORT}`);
 });
