@@ -145,7 +145,7 @@ router.post("/:id/outcome", async (req, res) => {
     // if completed, add evidence to database and send the id for evidence submission
     if (completed) {
         try {
-            const path = `evidence_user${req.user.id}_img${id}_${Date.now()}_${randomBytes(16)}.jpg`;
+            const path = `evidence_user${req.user.id}_img${id}_${Date.now()}_${randomBytes(4).toString('hex')}.jpg`;
             const result = await db.run("INSERT INTO evidence (img_id, user_id, path, lat, lng) VALUES (?, ?, ?, ??);", id, req.user.id, path, lat, lng);
             const evidenceId = result.lastID;
             return res.status(200).json({
@@ -186,6 +186,42 @@ router.post("/:id/submit", async (req, res) => {
 
         // mark the image as completed in SetTracker
         SetTracker.completeImg(req.user.id, id);
+
+        return res.status(200).json({
+            success: true,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: "Oopsies! Internal server error :("
+        });
+    }
+});
+
+// For creating sets
+
+/**
+ * POST /imgs/:id
+ * Used to upload an image file for a specific image id
+ */
+router.post("/:id", async (req, res) => {
+    const id = req.params.id;
+    try {
+        // Get the image path from metadata
+        const imgMeta = await db.get("SELECT path FROM imgs WHERE id = ?;", id);
+        if (!imgMeta) {
+            return res.status(404).json({
+                success: false,
+                error: "Image not found"
+            });
+        }
+
+        const imgPath = `${IMAGE_STORAGE_PATH}/${imgMeta.path}`;
+
+        // write image file to storage (from body)
+        // assuming the body is just the image
+        req.pipe(fs.createWriteStream(imgPath));
 
         return res.status(200).json({
             success: true,

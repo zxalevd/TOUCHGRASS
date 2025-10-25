@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS sets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
     creator_id INTEGER NOT NULL,
     time_limit INTEGER, -- seconds, NULL = no limit
     created_at DATETIME DEFAULT (datetime('now')),

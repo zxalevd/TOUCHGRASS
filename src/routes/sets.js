@@ -1,6 +1,7 @@
 import express from "express";
 import db from "../config/database.js";
 import SetTracker from "../config/setTracker.js";
+import {randomBytes} from "crypto";
 
 const router = express.Router();
 
@@ -12,7 +13,8 @@ router.get("/", async (req, res) => {
     const sqlSelectSets = `
         SELECT
             s.id,
-            u.username AS creator_username
+            s.name,
+            u.username AS creator_username,
             s.time_limit
         FROM sets s
         LEFT JOIN users u ON u.id = s.creator_id
@@ -27,6 +29,7 @@ router.get("/", async (req, res) => {
         });
     }
     catch (error) {
+        console.error(error);
         return res.status(500).json({
             success: false,
             error: "Oopsies! Internal server error :("
@@ -53,6 +56,7 @@ router.get("/:id", async (req, res) => {
     const sqlSelectSet = `
         SELECT
             s.id,
+            s.name,
             u.username AS creator_username,
             s.time_limit
         FROM sets s
@@ -135,6 +139,55 @@ router.post("/:id/finish", (req, res) => {
             success: true,
             timeout: false,
             message: "Set finished by user"
+        });
+    }
+});
+
+// For creating sets:
+
+/**
+ * POST /sets
+ * Used to create a set, and get the ids of the images to upload
+ */
+router.post("/", async (req, res) => {
+    const { name, time_limit, imgs } = req.body;
+    // imgs contains array of { title, hint, lat, lng, seq_no }
+
+    if (!name || !time_limit || !imgs || !Array.isArray(imgs) || imgs.length === 0) {
+        return res.status(400).json({
+            success: false,
+            error: "Name, time limit and images are required to create a set"
+        });
+    }
+
+    try {
+        // Create the set
+        const setResult = await db.run("INSERT INTO sets (name, creator_id, time_limit) VALUES (?, ?, ?);",
+            [name, req.user.id, time_limit]);
+        const setId = setResult.lastID;
+
+        // Create rows in imgs table, get their IDs and send them back
+        const imgIds = {}; // maps seq_no to img id
+        for (const img of imgs) {
+            const path = `set${setId}_img${img.seq_no}_${Date.now()}_${randomBytes(4).toString('hex')}.jpg`;
+            const imgResult = await db.run("INSERT INTO imgs (set_id, path, title, hint, lat, lng, seq_no) VALUES (?, ?, ?, ?, ?, ?, ?);",
+                [setId, path, img.title, img.hint, img.lat, img.lng, img.seq_no]);
+            imgIds[img.seq_no] = imgResult.lastID;
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                set_id: setId,
+                img_ids: imgIds
+            }
+        });
+    }
+    catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            success: false,
+            error: "Oopsies! Internal server error :("
         });
     }
 });
