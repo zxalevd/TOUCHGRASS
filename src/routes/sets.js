@@ -106,7 +106,7 @@ router.get("/:id", async (req, res) => {
  * Indicates completion of a set, or time out (which needs to be verified)
  */
 router.post("/:id/finish", (req, res) => {
-    const id = req.params.id;
+    const id = Number(req.params.id);
 
     // check if user has a timer (i.e. they started)
     if (!SetTracker.hasInstance(req.user.id) || SetTracker.getInstance(req.user.id).setId !== id) {
@@ -118,7 +118,8 @@ router.post("/:id/finish", (req, res) => {
 
     // Verify that all images have been submitted or skipped
     const instance = SetTracker.getInstance(req.user.id);
-    const allImgsHandled = instance.imgs.every(img => img.skipped || img.completed);
+    console.log(instance.imgs)
+    const allImgsHandled = Object.values(instance.imgs).every(img => img.skipped || img.completed);
     if (!allImgsHandled) {
         return res.status(400).json({
             success: false,
@@ -126,18 +127,31 @@ router.post("/:id/finish", (req, res) => {
         });
     }
 
+    // calculate score: 2 points per completed image, -1 point per hint used
+    let score = 0;
+    for (const img of Object.values(instance.imgs)) {
+        if (img.completed) score += 2;
+        if (img.hinted) score -= 1;
+    }
+
     // check that the time is up
     if (SetTracker.instanceTimedOut(req.user.id)) {
+        SetTracker.clearInstance(req.user.id);
         return res.status(200).json({
             success: true,
             timeout: true,
+            time: Date.now() - instance.start,
+            score: score,
             message: "Set finished due to time out"
         });
     }
     else {
+        SetTracker.clearInstance(req.user.id);
         return res.status(200).json({
             success: true,
             timeout: false,
+            time: Date.now() - instance.start,
+            score: score,
             message: "Set finished by user"
         });
     }

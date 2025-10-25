@@ -194,12 +194,13 @@ router.post("/:id/outcome", async (req, res) => {
             };
             const distance = haversine(authoritativeCoord, userCoord);
             console.log("Distance is: " + distance);
-            if (distance > 100) {
-                return res.status(400).json({
-                    success: false,
-                    error: "Submitted location is too far from the target location"
-                });
-            }
+            // TODO: uncomment this!
+            // if (distance > 100) {
+            //     return res.status(400).json({
+            //         success: false,
+            //         error: "Submitted location is too far from the target location"
+            //     });
+            // }
 
             const path = `evidence_user${req.user.id}_img${id}_${Date.now()}_${randomBytes(4).toString('hex')}.jpg`;
             const result = await db.run("INSERT INTO evidence (img_id, user_id, path, lat, lng) VALUES (?, ?, ?, ?, ?);", id, req.user.id, path, lat, lng);
@@ -210,6 +211,7 @@ router.post("/:id/outcome", async (req, res) => {
             });
         }
         catch (error) {
+            console.log(error);
             return res.status(500).json({
                 success: false,
                 error: "Oopsies! Internal server error :("
@@ -227,7 +229,7 @@ router.post("/:id/submit", async (req, res) => {
 
     // try to get the path from the evidence table
     try {
-        const evidence = await db.get("SELECT path FROM evidence WHERE id = ? AND user_id = ?;", id, req.user.id);
+        const evidence = await db.get("SELECT path, img_id FROM evidence WHERE id = ? AND user_id = ?;", id, req.user.id);
         if (!evidence) {
             return res.status(404).json({
                 success: false,
@@ -241,13 +243,14 @@ router.post("/:id/submit", async (req, res) => {
         req.pipe(fs.createWriteStream(imgPath));
 
         // mark the image as completed in SetTracker
-        SetTracker.completeImg(req.user.id, id);
+        SetTracker.completeImg(req.user.id, evidence.img_id, id);
 
         return res.status(200).json({
             success: true,
         });
     }
     catch (error) {
+        console.log(error);
         return res.status(500).json({
             success: false,
             error: "Oopsies! Internal server error :("

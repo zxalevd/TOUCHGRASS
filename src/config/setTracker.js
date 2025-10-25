@@ -11,7 +11,12 @@ class SetTracker {
     }
 
     static startInstance(userId, set) {
-        if (userId in SetTracker.setTracker) throw new Error("User already started a set.");
+        // Override old behaviour, if user already has an instance, clear it and start a new one
+        if (userId in SetTracker.setTracker) {
+            console.warn(`User ${userId} already had an active set. Overriding old instance.`);
+            SetTracker.clearInstance(userId);
+        }
+        // if (userId in SetTracker.setTracker) throw new Error("User already started a set.");
         const imgs = {};
         for (const img of set.imgs) {
             imgs[img.id] = {
@@ -40,10 +45,10 @@ class SetTracker {
         return SetTracker.setTracker[userId];
     }
 
-    static completeImg(userId, evidenceId) {
+    static completeImg(userId, imgId, evidenceId) {
         const instance = SetTracker.getInstance(userId);
-        instance.imgs[evidenceId].completed = true;
-        instance.imgs[evidenceId].evidence_id = evidenceId;
+        instance.imgs[imgId].completed = true;
+        instance.imgs[imgId].evidence_id = evidenceId;
     }
 
     static skipImg(userId, imgId) {
