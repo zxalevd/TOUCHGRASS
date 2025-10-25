@@ -194,13 +194,12 @@ router.post("/:id/outcome", async (req, res) => {
             };
             const distance = haversine(authoritativeCoord, userCoord);
             console.log("Distance is: " + distance);
-            // TODO: uncomment this!
-            // if (distance > 100) {
-            //     return res.status(400).json({
-            //         success: false,
-            //         error: "Submitted location is too far from the target location"
-            //     });
-            // }
+            if (distance > 100) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Submitted location is too far from the target location"
+                });
+            }
 
             const path = `evidence_user${req.user.id}_img${id}_${Date.now()}_${randomBytes(4).toString('hex')}.jpg`;
             const result = await db.run("INSERT INTO evidence (img_id, user_id, path, lat, lng) VALUES (?, ?, ?, ?, ?);", id, req.user.id, path, lat, lng);
