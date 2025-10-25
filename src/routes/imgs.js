@@ -4,6 +4,7 @@ import db from "../config/database.js";
 import SetTracker from "../config/setTracker.js";
 import { randomBytes } from "crypto";
 import * as fs from "node:fs";
+import haversine from "haversine-distance";
 
 dotenv.config();
 
@@ -17,6 +18,14 @@ const router = express.Router();
  */
 router.get("/:id", async (req, res) => {
     const id = req.params.id;
+
+    // Ensure the user has completed or skipped previous images in the set
+    if (!SetTracker.canAccessImage(req.user.id, id)) {
+        return res.status(403).json({
+            success: false,
+            error: "Access to this image is forbidden until previous images are completed or skipped"
+        });
+    }
 
     try {
         // Get the image path from metadata
@@ -90,6 +99,9 @@ router.get("/:id/hint", async (req, res) => {
             });
         }
 
+        // mark image as hinted in SetTracker
+        SetTracker.hintImg(req.user.id, id);
+
         return res.status(200).json({
             success: true,
             hint: imgMeta.hint
@@ -137,16 +149,60 @@ router.post("/:id/outcome", async (req, res) => {
         }
     }
 
+    // Ensure the user has started the set containing this image
+    if (!SetTracker.hasInstance(req.user.id)) {
+        return res.status(400).json({
+            success: false,
+            error: "User has not started the set containing this image"
+        });
+    }
+
+    // Ensure the user has completed or skipped previous images in the set
+    if (!SetTracker.canAccessImage(req.user.id, id)) {
+        return res.status(403).json({
+            success: false,
+            error: "Cannot submit outcome for this image until previous images are completed or skipped"
+        });
+    }
+
     // if skipped, update the SetTracker instance accordingly
     if (skipped) {
         SetTracker.skipImg(req.user.id, id);
+        return res.status(200).json({
+            success: true,
+        });
     }
 
     // if completed, add evidence to database and send the id for evidence submission
     if (completed) {
         try {
+            // check if the lat lng are within 100 meters of the image's target location
+            const imgMeta = await db.get("SELECT lat, lng FROM imgs WHERE id = ?;", id);
+            if (!imgMeta) {
+                return res.status(404).json({
+                    success: false,
+                    error: "Image not found"
+                });
+            }
+            const authoritativeCoord = {
+                latitude: imgMeta.lat,
+                longitude: imgMeta.lng
+            };
+            const userCoord = {
+                latitude: lat,
+                longitude: lng
+            };
+            const distance = haversine(authoritativeCoord, userCoord);
+            console.log("Distance is: " + distance);
+            if (distance > 100) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Submitted location is too far from the target location"
+                });
+            }
+
             const path = `evidence_user${req.user.id}_img${id}_${Date.now()}_${randomBytes(4).toString('hex')}.jpg`;
-            const result = await db.run("INSERT INTO evidence (img_id, user_id, path, lat, lng) VALUES (?, ?, ?, ??);", id, req.user.id, path, lat, lng);
+            const result = await db.run("INSERT INTO evidence (img_id, user_id, path, lat, lng) VALUES (?, ?, ?, ?, ?);", id, req.user.id, path, lat, lng);
             const evidenceId = result.lastID;
             return res.status(200).json({
                 success: true,

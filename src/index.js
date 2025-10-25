@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import morgan from 'morgan';
 import router from "./routes/index.js";
+import errorCatcher from "./middleware/errorCatcher.js";
 
 dotenv.config();
 
@@ -38,6 +39,8 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api', router);
+
+app.use(errorCatcher);
 
 // INITIALISE DB
 

@@ -15,6 +15,7 @@ class SetTracker {
         const imgs = {};
         for (const img of set.imgs) {
             imgs[img.id] = {
+                seq_no: img.seq_no,
                 skipped: false,
                 completed: false,
                 hinted: false,
@@ -53,6 +54,21 @@ class SetTracker {
     static hintImg(userId, imgId) {
         const instance = SetTracker.getInstance(userId);
         instance.imgs[imgId].hinted = true;
+    }
+
+    static canAccessImage(userId, imgId) {
+        const instance = SetTracker.getInstance(userId);
+        // Ensure all previous images (sequence) are skipped or completed
+        const imgSeqNo = instance.imgs[imgId].seq_no;
+        for (const imgKey in instance.imgs) {
+            const img = instance.imgs[imgKey];
+            if (img.seq_no < imgSeqNo) {
+                if (!img.skipped && !img.completed) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 }
 
